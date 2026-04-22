@@ -26,7 +26,7 @@ Calculate CG methylation levels from **allc** files over genomic regions defined
 ## Installation
 
 ```bash
-git clone https://github.com/yourname/methylave.git
+git clone https://github.com/hengbingao/methylave.git
 cd methylave
 
 # Option A: install as a command (recommended)
