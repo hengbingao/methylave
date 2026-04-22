@@ -141,7 +141,7 @@ methylave region \
     --allc      sample.allc.gz \
     --bed       E1.bed \
     --method    method2 \
-    --suffix E1_sample_CG_methylation_method2.tsv
+    --suffix E1_sample_CG_methylation_method2.tsv \
     --output_dir region_results/ \
     --threads   4
 ```
