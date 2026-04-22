@@ -1,0 +1,148 @@
+#!/usr/bin/env python3
+"""
+methylave — CG methylation calculator from allc files
+
+Two modes
+---------
+summary   : one output row per BED file  (aggregate all regions)
+region    : one output row per region    (per-region breakdown)
+
+Two calculation methods
+-----------------------
+method1   : total_mc / total_coverage   (coverage-weighted, default)
+method2   : mean of per-CpG fractions   (equal-weight per site)
+
+Usage examples
+--------------
+# Summary mode, single BED, method1
+methylave summary \\
+    --allc sample.allc.gz \\
+    --bed E1.bed \\
+    --output summary_E1.tsv
+
+# Summary mode, multiple BEDs, method2, parallel
+methylave summary \\
+    --allc sample.allc.gz \\
+    --bed E1.bed E2.bed E3.bed \\
+    --method method2 \\
+    --threads 4 \\
+    --output summary_all.tsv
+
+# Region mode, single BED, method1
+methylave region \\
+    --allc sample.allc.gz \\
+    --bed E1.bed \\
+    --output_dir region_results/
+
+# Region mode, multiple BEDs, method2
+methylave region \\
+    --allc sample.allc.gz \\
+    --bed E1.bed E2.bed \\
+    --method method2 \\
+    --threads 4 \\
+    --output_dir region_results/
+"""
+
+import argparse
+import sys
+from pathlib import Path
+
+from methylave.utils   import log, resolve_bedtools
+from methylave.allc    import make_allc_bed, sort_bed
+from methylave.summary import run_summary
+from methylave.region  import run_region
+
+
+def build_parser():
+    p = argparse.ArgumentParser(
+        prog="methylave",
+        description="Calculate CG methylation levels from allc files over BED regions.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__,
+    )
+    p.add_argument(
+        "--version", action="version", version="methylave 1.0.0"
+    )
+
+    # ── shared arguments ──────────────────────────────────────────────────────
+    shared = argparse.ArgumentParser(add_help=False)
+    shared.add_argument(
+        "--allc", required=True, metavar="FILE",
+        help="allc or allc.gz file "
+             "(tab-separated: chr pos strand mc_class mc_count total_count methylated)")
+    shared.add_argument(
+        "--bed", required=True, nargs="+", metavar="FILE",
+        help="One or more BED files to analyse")
+    shared.add_argument(
+        "--method", choices=["method1", "method2"], default="method1",
+        help=(
+            "method1: total_mc / total_coverage (coverage-weighted)  "
+            "method2: mean of per-CpG fractions (equal-weight per site)  "
+            "[default: method1]"))
+    shared.add_argument(
+        "--context", default="CG", metavar="STR",
+        help="Methylation context prefix to keep, e.g. CG, CH [default: CG]")
+    shared.add_argument(
+        "--bedtools", default=None, metavar="PATH",
+        help="Full path to bedtools binary (auto-detected if not specified)")
+    shared.add_argument(
+        "--threads", type=int, default=4, metavar="N",
+        help="Number of parallel threads [default: 4]")
+    shared.add_argument(
+        "--min_coverage", type=int, default=1, metavar="INT",
+        help="Minimum read coverage per CpG site to include [default: 1]")
+
+    # ── sub-commands ──────────────────────────────────────────────────────────
+    sub = p.add_subparsers(dest="mode", required=True)
+
+    # summary
+    sp = sub.add_parser(
+        "summary", parents=[shared],
+        help="One row per BED file — aggregate methylation across all regions")
+    sp.add_argument(
+        "--output", default="summary_methylation.tsv", metavar="FILE",
+        help="Output TSV file [default: summary_methylation.tsv]")
+
+    # region
+    rp = sub.add_parser(
+        "region", parents=[shared],
+        help="One row per region — per-region methylation breakdown")
+    rp.add_argument(
+        "--output_dir", default=".", metavar="DIR",
+        help="Directory for per-BED output files [default: current dir]")
+    rp.add_argument(
+        "--suffix", default="_region_methylation.tsv", metavar="STR",
+        help="Suffix appended to each BED basename for the output file "
+             "[default: _region_methylation.tsv]")
+
+    return p
+
+
+def main():
+    parser = build_parser()
+    args   = parser.parse_args()
+
+    bedtools_bin = resolve_bedtools(args.bedtools)
+    log("methylave  |  mode={}  method={}  context={}  threads={}".format(
+        args.mode, args.method, args.context, args.threads))
+    log("bedtools: {}".format(bedtools_bin))
+
+    # validate BED files
+    bed_paths = []
+    for b in args.bed:
+        p = Path(b)
+        if not p.exists():
+            log("ERROR: BED file not found: {}".format(b))
+            sys.exit(1)
+        bed_paths.append(p)
+    log("BED files ({}): {}".format(
+        len(bed_paths), ", ".join(str(p) for p in bed_paths)))
+
+    if args.mode == "summary":
+        run_summary(args, bedtools_bin, bed_paths)
+    else:
+        run_region(args, bedtools_bin, bed_paths)
+
+
+if __name__ == "__main__":
+    main()
