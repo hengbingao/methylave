@@ -136,6 +136,16 @@ region_results/
   E2_region_methylation.tsv
 ```
 
+```bash
+methylave region \
+    --allc      sample.allc.gz \
+    --bed       E1.bed \
+    --method    method2 \
+    --suffix E1_sample_CG_methylation_method2.tsv
+    --output_dir region_results/ \
+    --threads   4
+```
+
 **Output columns**
 
 | column | description |
